@@ -40,7 +40,7 @@ abstract class Term[+T](pos: SourcePosition) {
 	def foldUp[S](z: S)(f: (S, Term[T]) => S): S = {
 		f(
 			this.children.foldLeft(z) {
-				(r, t) => t.foldDown(r)(f)
+				(r, t) => t.foldUp(r)(f)
 			},
 			this
 		)

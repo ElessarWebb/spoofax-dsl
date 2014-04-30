@@ -8,13 +8,13 @@ class TermsSpec extends FlatSpec with Matchers {
 		override def children = _children
 	}
 
-	val ast = Node(0, List(Node(1), Node(2)))
+	val ast = Node(0, List(Node(1, List(Node(3), Node(4))), Node(2, List(Node(5), Node(6)))))
 
-	"foldDown" should "treat a node first and then it's children from left to right" in {
-		ast.foldDown("") { case (acc, n) => acc + n } should be ("012")
+	"foldPreOrder" should "treat a node first and then it's children from left to right recursively" in {
+		ast.foldDown("") { case (acc, n) => acc + n } should be ("0134256")
 	}
 
-	"foldUp" should "treat a node's children first from left to right and then itself" in {
-		ast.foldUp("") { case (acc, n) => acc + n } should be ("120")
+	"foldPostOrder" should "treat a node's children first from left to right and then itself recursively" in {
+		ast.foldUp("") { case (acc, n) => acc + n } should be ("3415620")
 	}
 }
