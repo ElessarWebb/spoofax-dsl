@@ -3,9 +3,8 @@ import spoofax.scala.ast._
 
 class TermsSpec extends FlatSpec with Matchers {
 
-	case class Node(i: Int, _children: List[Node] = List()) extends Term[Nothing]((0,0)) {
+	case class Node(i: Int, children: Seq[Node] = List()) extends Term(children) {
 		override def toString = s"$i"
-		override def children = _children
 	}
 
 	val ast = Node(0, List(Node(1, List(Node(3), Node(4))), Node(2, List(Node(5), Node(6)))))

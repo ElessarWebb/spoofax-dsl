@@ -3,19 +3,21 @@ package spoofax.scala {
 package object ast {
 	// an AST is of course nothing else then just the root of the AST
 	// which is a Term.
-	type AST[+T] = Term[T]
+	type AST = Term
 	type SourcePosition = (Int, Int)
+	
 }
 
 package ast {
 
 /**
- * Terms are parametrized over identifier type T to be able to add more information to identifiers
- * in different compiler stages.
- * e.g. the parser produces a tree of type Term[String], whereas the renamer produces Term[Term]
+ * Term without children
  */
-abstract class Term[+T](pos: SourcePosition) {
-	def children: Seq[Term[T]]
+trait Leaf extends Term {
+	def children = Nil
+}
+
+abstract class Term(children: Seq[Term]) {
 
 	/**
 	 * Fold operation on an AST.
@@ -24,7 +26,7 @@ abstract class Term[+T](pos: SourcePosition) {
 	 * @param z initial value
 	 * @param f fold function
 	 */
-	def foldDown[S](z: S)(f: (S, Term[T]) => S): S = {
+	def foldDown[S](z: S)(f: (S, Term) => S): S = {
 		this.children.foldLeft(f(z, this)) {
 			case (acc, child) => child.foldDown(acc)(f)
 		}
@@ -37,7 +39,7 @@ abstract class Term[+T](pos: SourcePosition) {
 	 * @param z initial value
 	 * @param f fold function
 	 */
-	def foldUp[S](z: S)(f: (S, Term[T]) => S): S = {
+	def foldUp[S](z: S)(f: (S, Term) => S): S = {
 		f(
 			this.children.foldLeft(z) {
 				(r, t) => t.foldUp(r)(f)
@@ -45,4 +47,8 @@ abstract class Term[+T](pos: SourcePosition) {
 			this
 		)
 	}
+}
+
+}
+
 }
