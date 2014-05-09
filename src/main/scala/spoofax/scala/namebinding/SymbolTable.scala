@@ -54,4 +54,6 @@ case class SymbolTable(
 	}
 
 	def leave_scope(): Option[SymbolTable] = current.parent.map(SymbolTable(global, _, term_scopes))
+
+	def lookup_lexical(ns: Namespace, name: String) = ???
 }
