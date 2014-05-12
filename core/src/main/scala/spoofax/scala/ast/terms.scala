@@ -5,66 +5,9 @@ package object ast {
 	// which is a Term.
 	type AST = Term
 	type SourcePosition = (Int, Int)
-	
 }
 
 package ast {
-	import scala.reflect.macros.whitebox.Context
-	import scala.language.experimental.macros
-	import scala.annotation.StaticAnnotation
-
-	/**
-	 * Macro annotation that allows you to write
-	 *
-	 * @TerM case class A(c: ChildL, c: ChildR)
-	 *
-	 * such that it is expanded to:
-	 *
-	 * case class A(l: ChildL, r: ChildR, annotations: TermAnnotations) extends Term(List(l, r), annotations)
-	 * object A {
-	 * 	def apply(l: ChildL, r: ChildR) = A(l, r, NoAnnotations())
-	 * 	def unapply(c: A): Option[(ChildL, ChildR)] = {
-	 * 		if(c == null) return None
-	 * 	 	else return Some(c.l, c.r)
-	 * 	}
-	 * }
-	 **/
-	object TerM {
-
-		def impl(c: Context)(annottees: c.Expr[Any]*): c.Expr[Any] = {
-			import c.universe._
-
-			val inputs = annottees.map(_.tree).toList
-			val outputs = inputs match {
-				case (cd@ClassDef(cmods, cname, _, _)) :: tail =>
-					val mod = tail match {
-						case md@ModuleDef(_, mname, impl)
-							if cname.decodedName.toString == mname.decodedName.toString => md
-						case _ =>
-							// TODO flags copying?
-							val ctor = cd.impl.collect {
-								case ctor@DefDef(_, termNames.CONSTRUCTOR, _, _, _, _) => ctor
-							}
-
-							q"""
-								$cmods object ${TermName(cname.decodedName.toString)} {
-								}
-							"""
-					}
-
-					List(mod)
-			}
-
-			println(outputs)
-
-			c.Expr[Any](Block(inputs ++ outputs, Literal(Constant())))
-		}
-	}
-
-	class TerM extends StaticAnnotation {
-		def macroTransform(annottees: Any*): Any = macro ???
-	}
-
 	/**
 	 * Term without children
 	 */
