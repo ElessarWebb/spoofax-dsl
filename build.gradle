@@ -30,8 +30,18 @@ subprojects {
 project(':macros') {
   dependencies {
     compile 'org.scala-lang:scala-reflect:2.11.0'
+    compile 'org.scalamacros:paradise_2.11.0:2.0.0'
 
     runtime "org.scala-lang:scala-compiler:2.11.0"
+  }
+
+  compileScala {
+    String parjar = project(":macros").configurations.compile.find { it.name.startsWith("paradise") }
+    scalaCompileOptions.additionalParameters = [
+      "-Xplugin:$parjar",
+      "-Xplugin-require:macroparadise",
+      "-Xshow-phases"
+    ]
   }
 }
 
