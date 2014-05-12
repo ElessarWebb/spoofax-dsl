@@ -31,4 +31,18 @@ class SimpleNamerSpec extends FlatSpec with Matchers {
 		assert(tab.global.symbols(Tuple2(NSClass, "A")) == ca)
 		assert(tab.global.symbols(Tuple2(NSClass, "B")) == cb)
 	}
+
+	"namer" should "resolve backward references in same scope" in {
+		val definitions: NamingRules = context => {
+			import context._
+
+			// actual rules
+			{
+				case c@Class(x, p) =>
+					defines(NSClass, x) and references(NSClass, x)
+			}
+		}
+
+		val (_, tab) = Namer(definitions)(ast)
+	}
 }
