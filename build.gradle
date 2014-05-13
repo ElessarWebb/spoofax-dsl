@@ -23,6 +23,23 @@ allprojects {
     testCompile 'junit:junit:4.11'
     testCompile 'org.scalatest:scalatest_2.11:2.1.5'
   }
+
+  task test(overwrite: true, dependsOn: compileTestScala) << {
+
+    ant.taskdef(
+      name: 'scalatest',
+      classname: 'org.scalatest.tools.ScalaTestAntTask',
+      classpath: configurations.testRuntime.asPath+':'+compileScala.destinationDir
+    )
+
+    ant.scalatest(
+      runpath: sourceSets.test.output.classesDir,
+      haltonfailure: 'true',
+      fork: 'false'
+    ) {
+      reporter(type: 'stderr')
+    }
+  }
 }
 
 subprojects {
