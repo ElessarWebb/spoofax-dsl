@@ -17,6 +17,7 @@ allprojects {
   dependencies {
     compile 'org.scala-lang:scala-library:2.11.0'
     compile 'org.scalamacros:paradise_2.11.0:2.0.0'
+    compile 'com.netflix.rxjava:rxjava-scala:0.18.3'
 
     runtime "org.scala-lang:scala-library:2.11.0"
 
