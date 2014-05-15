@@ -5,6 +5,8 @@ package object ast {
 	// which is a Term.
 	type AST = Term
 	type SourcePosition = (Int, Int)
+
+	object TheProgram extends Term with Leaf
 }
 
 package ast {

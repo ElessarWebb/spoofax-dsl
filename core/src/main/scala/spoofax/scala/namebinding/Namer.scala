@@ -1,8 +1,12 @@
 package spoofax.scala
 
 import spoofax.scala.ast.{AST, Term}
+import rx.lang.scala.Observable
 
 package object namebinding {
+
+	type Index = Map[Scope, Observable[Term]]
+
 	// type of functions that transform the symboltable in any sense
 	type SymTrans = SymbolTable => SymbolTable
 
@@ -35,9 +39,7 @@ package object namebinding {
 
 	object SymTrans {
 		def references(ns: Namespace, name: String) = { symtab: SymbolTable =>
-			val definition = symtab.lookup_lexical(ns, name)
-			// TODO bind it to the ast
-
+			// TODO do the actual lookup
 			symtab
 		}
 	}
@@ -48,7 +50,7 @@ package namebinding {
 	case class RuleContext(currentTerm: Term) {
 		def defines(ns: Namespace, name: String): SymTrans = _.define(ns, name, currentTerm)
 		def references(ns: Namespace, name: String): SymTrans = SymTrans.references(ns, name)
-		def scopes(scopes: List[Namespace]): SymTrans = _.enter_scope(currentTerm, scopes)
+		def scopes(scopes: List[Namespace]): SymTrans = _.enter_scope(scopes, currentTerm)
 	}
 
 	/**

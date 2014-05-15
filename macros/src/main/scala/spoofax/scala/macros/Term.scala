@@ -43,7 +43,6 @@ object termMacro {
 				))
 
 				val ctorname = TermName(tpname.decodedName.toString)
-
 				(
 					q"""class $tpname(...$ctorparams) extends Term { $self =>
 								def children() = {

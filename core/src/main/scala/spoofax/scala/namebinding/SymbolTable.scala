@@ -1,73 +1,88 @@
 package spoofax.scala.namebinding
 
+import rx.lang.scala.Observable
 import spoofax.scala.ast._
-import scala.concurrent.Future
-import scala.collection.immutable
-import scala.collection.mutable
+import scala.collection.immutable.HashMap
+import java.util.concurrent.atomic.AtomicInteger
+import scala.concurrent._
+import scala.util.Try
+import scala.concurrent.duration.Duration
+import scala.Tuple2
 
-protected case class Scope(
-	parent: Option[Scope],
-	scopes: Seq[Namespace],
-	symbols: mutable.Map[(Namespace, String), Term] = new mutable.HashMap()
-	) {
+object Scope {
+	private val _uid: AtomicInteger = new AtomicInteger(0)
+	def uid(): Int = _uid.incrementAndGet().toInt
+}
 
-	def define(ns: Namespace, name: String, term: Term) = {
-		symbols += Tuple2((ns, name), term)
-		this
-	}
+case class Scope(parent: Scope, ns: Namespace, owner: Term) {
+	// readonly id
+	protected val _uid = Scope.uid()
+	def uid = _uid
 
-	// scoping
-	def enter_scope(scopes: Seq[Namespace]) = Scope(Some(this), scopes)
+	// utility method for creating new scope/getting parent
+	def enter(space: Namespace, owner: Term) = Scope(this, space, owner)
+	def leave() = parent
+}
+object RootScope extends Scope(null, NSRoot, TheProgram) {
+	// root scope is uniquely identified by uid 0
+	override val _uid = 0
 
-	def leave_scope(): Option[Scope] = parent
-
-	/**
-	 * Lookup a name in this scope
-	 */
-	private def lookup_local(ns: Namespace, id: String): Option[Term] = symbols.get((ns, id))
-
-	/**
-	 * Lookup a name in the parent scope
-	 */
-	private def lookup_parent(ns: Namespace, id: String): Option[Term] = parent.flatMap { ps =>
-		ps.lookup_lexical(ns, id)
-	}
-
-	/**
-	 * Lookup a name in the lexical scope for the given namespace
-	 */
-	def lookup_lexical(ns: Namespace, id: String): Option[Term] = lookup_local(ns, id).orElse {
-		if(!scopes.contains(ns)) lookup_parent(ns, id)
-		else None
-	}
-
+	// ... you can check out any time you like, but you can neeeever leeeavee!
+	override def leave() = this
 }
 
 object SymbolTable {
-	def apply(): SymbolTable = {
-		val global = Scope(None, List())
-		SymbolTable(global, global)
-	}
+	def apply(index: Index, inScopes: Map[Namespace, Scope])(implicit todos: Seq[Task]) =
+		SymbolTable(index, inScopes, todos)
 }
 
+/**
+ * Immutable class representing a view on the index
+ */
 case class SymbolTable(
-	global: Scope,
-	current: Scope,
-	term_scopes: Map[Term, Scope] = new immutable.HashMap()
-	) {
+	index: Index = Map[Scope, Observable[Term]](),
+	inScopes: Map[Namespace, Scope] = Map[Namespace, Scope](),
+	implicit val todos: Seq[Task] = Nil
+)(implicit ec: ExecutionContext) {
 
-	def define(ns: Namespace, name: String, term: Term) = SymbolTable(
-		global,
-		current.define(ns, name, term),
-		term_scopes
+	implicit class ScopesWrapper(val scopes: Map[Namespace, Scope]) {
+		def getScope(ns: Namespace) = scopes.getOrElse(ns, RootScope)
+	}
+
+	def enter_scope(scopes: List[Namespace], owner: Term) = SymbolTable(
+		index,
+		scopes.foldLeft(inScopes) {
+			case (in, ns) => in.updated(
+				ns,
+				in.getScope(ns).enter(ns, owner)
+			)
+		}
 	)
 
-	def enter_scope(owner: Term, scopes: Seq[Namespace]): SymbolTable = {
-		val scope = current.enter_scope(scopes)
-		SymbolTable(global, scope, term_scopes + Tuple2(owner, scope))
+	def leave_scope(scopes: List[Namespace]) = SymbolTable(
+		index,
+		scopes.foldLeft(inScopes) {
+			case (in, ns) => in.updated(ns, in.getScope(ns).leave())
+		}
+	)
+
+	def define(ns: Namespace, name: String, term: Term) = SymbolTable(
+		index + Tuple2(inScopes.getOrElse(ns, RootScope), Observable.items(term)),
+		inScopes
+	)
+
+	def lexical_lookup(ns: Namespace, name: String) = {
+		val lookuptask = LookupTask(ns, name)
+		SymbolTable(
+			index + Tuple2(inScopes.getScope(ns), lookuptask.observable),
+			inScopes,
+			lookuptask +: todos
+		)
 	}
-
-	def leave_scope(): Option[SymbolTable] = current.parent.map(SymbolTable(global, _, term_scopes))
-
-	def lookup_lexical(ns: Namespace, name: String) = current.lookup_lexical(ns, name)
 }
+
+sealed class Task(promise: Promise[Term]) {
+	def observable: Observable[Term] = Observable.from(promise.future)
+}
+
+case class LookupTask(ns: Namespace, name: String, p: Promise[Term] = Promise[Term]()) extends Task(p)
