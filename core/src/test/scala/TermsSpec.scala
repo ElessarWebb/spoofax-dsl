@@ -1,7 +1,7 @@
 import org.scalatest._
 import spoofax.scala.ast._
 
-class TermsSpec extends FlatSpec with Matchers {
+/*class TermsSpec extends FlatSpec with Matchers {
 
 	case class Node(i: Int, children: Seq[Node] = List()) extends Term(children) {
 		override def toString = s"$i"
@@ -16,4 +16,4 @@ class TermsSpec extends FlatSpec with Matchers {
 	"foldPostOrder" should "treat a node's children first from left to right and then itself recursively" in {
 		ast.foldUp("") { case (acc, n) => acc + n } should be ("3415620")
 	}
-}
+}*/

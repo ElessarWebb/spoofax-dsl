@@ -15,7 +15,9 @@ package ast {
 		def children = Nil
 	}
 
-	abstract class Term(children: Seq[Term]) {
+	abstract class Term {
+
+		def children(): Seq[Term]
 
 		/**
 		 * Fold operation on an AST.

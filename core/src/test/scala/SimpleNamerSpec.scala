@@ -1,15 +1,21 @@
 import org.scalatest.{FlatSpec, Matchers}
+import org.scalatest.junit.JUnitRunner
+import org.junit.runner.RunWith
 
-import spoofax.scala.ast.Term
+import spoofax.scala.ast.{Leaf, Term}
 import spoofax.scala.namebinding.{NamingRules, Namespace, Namer}
 
-case object NSClass extends Namespace
-
-case class Module(classes: List[Class]) extends Term(classes)
-case class Class(name: String, parent: Option[ID]) extends Term(parent.map(List(_)).getOrElse(Nil))
-case class ID(name: String) extends Term(Nil)
-
+@RunWith(classOf[JUnitRunner])
 class SimpleNamerSpec extends FlatSpec with Matchers {
+	case object NSClass extends Namespace
+
+	case class Module(classes: List[Class]) extends Term {
+		def children = classes
+	}
+	case class Class(name: String, parent: Option[ID]) extends Term {
+		def children = parent.map(List(_)).getOrElse(Nil)
+	}
+	case class ID(name: String) extends Term with Leaf
 
 	val ca = Class("A", None)
 	val cb = Class("B", Some(ID("A")))
@@ -32,7 +38,7 @@ class SimpleNamerSpec extends FlatSpec with Matchers {
 		assert(tab.global.symbols(Tuple2(NSClass, "B")) == cb)
 	}
 
-	"namer" should "resolve backward references in same scope" in {
+	it should "resolve backward references in same scope" in {
 		val definitions: NamingRules = context => {
 			import context._
 

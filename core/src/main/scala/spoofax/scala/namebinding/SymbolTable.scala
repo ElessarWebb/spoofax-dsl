@@ -21,12 +21,26 @@ protected case class Scope(
 
 	def leave_scope(): Option[Scope] = parent
 
-	// lookups
-	def lookup_local(ns: Namespace, id: String): Future[Term] = ???
+	/**
+	 * Lookup a name in this scope
+	 */
+	private def lookup_local(ns: Namespace, id: String): Option[Term] = symbols.get((ns, id))
 
-	def lookup_lexical(ns: Namespace, id: String): Future[Term] = ???
+	/**
+	 * Lookup a name in the parent scope
+	 */
+	private def lookup_parent(ns: Namespace, id: String): Option[Term] = parent.flatMap { ps =>
+		ps.lookup_lexical(ns, id)
+	}
 
-	def lookup_surrounding(ns: Namespace, id: String): Future[Term] = ???
+	/**
+	 * Lookup a name in the lexical scope for the given namespace
+	 */
+	def lookup_lexical(ns: Namespace, id: String): Option[Term] = lookup_local(ns, id).orElse {
+		if(!scopes.contains(ns)) lookup_parent(ns, id)
+		else None
+	}
+
 }
 
 object SymbolTable {
@@ -55,5 +69,5 @@ case class SymbolTable(
 
 	def leave_scope(): Option[SymbolTable] = current.parent.map(SymbolTable(global, _, term_scopes))
 
-	def lookup_lexical(ns: Namespace, name: String) = ???
+	def lookup_lexical(ns: Namespace, name: String) = current.lookup_lexical(ns, name)
 }

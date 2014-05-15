@@ -25,38 +25,44 @@ class term extends StaticAnnotation {
 }
 
 object termMacro {
-	def valdefs_to_params(c: Context)(params: Seq[c.universe.ValDef]): c.Expr[Any] = {
-		import c.universe._
-
-		params.map {
-				case q"$mods val $name: $tpt = $default" =>
-					q""
-				case _ => c.abort(c.enclosingPosition, "Expected val definition")
-		}
-
-		c.Expr(params(0))
-	}
 
 	def impl(c: Context)(annottees: c.Expr[Any]*): c.Expr[Any] = {
 		import c.universe._
 		val inputs = annottees.map(_.tree).toList
+
 		val (cls, comp) = annottees.map(_.tree) match {
-			// todo: check modifiers/parents et al
+
 			case cd@q"$mods class $tpname[..$tparams] $ctorMods(...$paramss) extends { ..$_ } with ..$_ { $self => ..$stats }" :: tail =>
-				//valdefs_to_params(c)(paramss)
+
+				val paramnames = paramss.head.map {
+					case q"$mods val $name: $tpt = $default" => name
+				}
+
+				val ctorparams = List(paramss.head ++ Seq(
+					q"val position: Option[SourcePosition] = None"
+				))
+
+				val ctorname = TermName(tpname.decodedName.toString)
+
 				(
-					q"""import spoofax.scala.ast.Term
-				 			case class $tpname(...$paramss) extends Term(Nil) { $self =>
+					q"""class $tpname(...$ctorparams) extends Term { $self =>
+								def children() = {
+									List(..$paramnames)
+								}
+
 								..$stats
 							}
 					 """,
-					q"""object ${TermName(tpname.decodedName.toString)} {
-				 				def companion(...$paramss) = {
-									42
-				 				}
+					q""" object $ctorname {
+				 				def apply(...$paramss): $tpname = new $tpname(..$paramnames, None)
+
+				 				def unapply(t: $tpname): Option[(Int, Int)] = {
+									Some(Tuple2(3, 4))
+								}
 				  		}
 					"""
 				)
+
 			case head :: tail =>
 				c.abort(c.enclosingPosition, s"The @Term annotation is for case classes, found $head")
 		}
