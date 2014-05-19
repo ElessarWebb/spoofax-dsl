@@ -1,11 +1,8 @@
 package spoofax.scala
 
 import spoofax.scala.ast.{AST, Term}
-import rx.lang.scala.Observable
 
 package object namebinding {
-
-	type Index = Map[Scope, Observable[Term]]
 
 	// type of functions that transform the symboltable in any sense
 	type SymTrans = SymbolTable => SymbolTable
@@ -39,8 +36,7 @@ package object namebinding {
 
 	object SymTrans {
 		def references(ns: Namespace, name: String) = { symtab: SymbolTable =>
-			// TODO do the actual lookup
-			symtab
+			symtab.lexical_lookup(ns, name)
 		}
 	}
 }
@@ -61,7 +57,9 @@ package namebinding {
 	 */
 	case class Namer(rules: NamingRules) {
 
-		def apply(ast: AST): (AST, SymbolTable) = (ast, ast.foldDown(SymbolTable()) {
+		/** Pass 1: collect all tasks on the AST
+			*/
+		def collect(ast: AST): SymbolTable = ast.foldDown(SymbolTable()) {
 			case (symtab, term) =>
 				// rules are partial functions from terms to (SymTab => Symtab)
 				// if the term is not part of the domain of the rule,
@@ -69,6 +67,10 @@ package namebinding {
 				rules(RuleContext(term)).applyOrElse(term, {
 					_: Term => _: SymbolTable => symtab
 				})(symtab)
-		})
+		}
+
+		def execute(symtab: SymbolTable): SymbolTable = symtab.execute()
+
+		def apply(ast: AST): (AST, SymbolTable) = (ast, (collect _ andThen execute)(ast))
 	}
 }
