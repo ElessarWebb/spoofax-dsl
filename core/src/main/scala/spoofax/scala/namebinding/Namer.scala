@@ -17,19 +17,6 @@ package object namebinding {
 	}
 
 	/**
-	 * This implicit class allows one to write namebinding rules on sub terms of matched terms.
-	 * e.g.:
-	 *
-	 * case Class(x, Some(p@ID(pname))) =>
-	 * 				defines(NSClass, x)
-	 * 		and p.references(NSClass, pname)
-	 */
-	/*implicit class OnTerm[T <: Node](val term: T) extends AnyVal {
-		def defines(ns: Namespace, name: String): SymTrans = SymTrans.define(term, ns, name)
-		def references(ns: Namespace, name: String): SymTrans = SymTrans.references(term, ns, name)
-	}*/
-
-	/**
 	 * Composition functions for context transformations
 	 */
 	implicit class SymTransComposers(st: SymTrans) {
