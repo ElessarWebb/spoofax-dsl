@@ -1,56 +1,26 @@
 package spoofax.scala.namebinding
 
 import spoofax.scala.ast._
-import java.util.concurrent.atomic.AtomicInteger
 import scala.concurrent._
-import scala.concurrent.ExecutionContext.Implicits.global
-import scala.Tuple2
+import scala.util.Success
+import rx.lang.scala._
+import rx.lang.scala.subjects.BehaviorSubject
 
 case class Index(
-	definitions: Map[QualifiedName, Task] = Map(),
-	resolutions: Seq[Task] = List()
+	definitions: Map[QualifiedName, Task[Node]] = Map(),
+	resolutions: Seq[DeferredTask[_]] = List()
 ) {
-	def define(d: (QualifiedName, Task)) = Index(
+	def define(d: (QualifiedName, Task[Node])) = Index(
 		definitions + d,
 		resolutions
 	)
 
-	def resolve(d: (Task)) = Index(
+	def resolve(d: (DeferredTask[_])) = Index(
 		definitions,
 		d +: resolutions
 	)
 
 	def deferred = resolutions
-}
-
-object Scope {
-	private val _uid: AtomicInteger = new AtomicInteger(0)
-	def uid(): Int = _uid.incrementAndGet().toInt
-}
-
-case class Scope(parent: Scope, ns: Namespace, owner: Term) {
-	// readonly id
-	protected val _uid = Scope.uid()
-	def uid = _uid
-
-	// utility method for creating new scope/getting parent
-	def enter(space: Namespace, owner: Term) = Scope(this, space, owner)
-	def leave() = parent
-
-	override def toString = s"${parent.toString}/$ns"
-}
-object RootScope extends Scope(null, NSRoot, TheProgram) {
-	// root scope is uniquely identified by uid 0
-	override val _uid = 0
-
-	// ... you can check out any time you like, but you can neeeever leeeavee!
-	override def leave() = this
-
-	override def toString = s"/"
-}
-
-case class QualifiedName(scope: Scope, ns: Namespace, name: String) {
-	override def toString = s"${scope.toString}/$ns:$name"
 }
 
 case class NameNotFoundException(qname: QualifiedName) extends Exception(
@@ -69,7 +39,7 @@ case class SymbolTable(
 		def getScope(ns: Namespace) = scopes.getOrElse(ns, RootScope)
 	}
 
-	def enter_scope(scopes: List[Namespace], owner: Term) = SymbolTable(
+	def enter_scope(scopes: List[Namespace], owner: Node) = SymbolTable(
 		index,
 		scopes.foldLeft(inScopes) {
 			case (in, ns) => in.updated(
@@ -98,20 +68,24 @@ case class SymbolTable(
 		name
 	)
 
-	def define(ns: Namespace, name: String, term: Term) = SymbolTable(
-		index define Tuple2(get_qualified_name(ns, name), DefinesTask(term)),
-		inScopes
-	)
-
-	def lexical_lookup(ns: Namespace, name: String) = {
-		SymbolTable(
-			index resolve LookupTask(ns, name, inScopes.getScope(ns)),
+	def define(ns: Namespace, name: String, term: Node): (Task[Node], SymbolTable)= {
+		val task = DefinesTask(term)
+		(task, SymbolTable(
+			index define Tuple2(get_qualified_name(ns, name), task),
 			inScopes
-		)
+		))
 	}
 
-	def execute(): SymbolTable = {
-		index.deferred.foreach(_.execute(index))
+	def lexical_lookup(ns: Namespace, name: String): (Task[Option[Node]], SymbolTable) = {
+		val task = LookupTask(ns, name, inScopes.getScope(ns))
+		(task, SymbolTable(
+			index resolve task,
+			inScopes
+		))
+	}
+
+	def execute()(implicit ect: ExecutionContext): SymbolTable = {
+		index.deferred.foreach(_.exec(index))
 		this
 	}
 
@@ -132,41 +106,51 @@ case class SymbolTable(
 	}
 }
 
-sealed abstract class Task {
-	def execute(index: Index): Future[Unit]
+sealed abstract class Task[T] {
+	def result: Observable[T]
 }
 
 /**
  * Task of which the result is computed in a later stage
  */
-abstract class DeferredTask(promise: Promise[Term]) extends Task
+abstract class DeferredTask[T] extends Task[T] {
+	def exec(index: Index)(implicit ectx: ExecutionContext): Observable[T]
+}
 
 /**
  * Task of which the result is known at the time of creation
+ * and is immutable
  */
-abstract class ImmediateTask(term: Term) extends Task {
-	def execute(index: Index) = Future {}
+abstract class ImmediateTask[T](value: T) extends Task[T] {
+	// immediately fulfill the promise
+	override def result = Observable.items(value)
 }
 
 /**
  * Lookup the definition of the given name
  */
-case class LookupTask(
-	ns: Namespace,
-	name: String,
-	scope: Scope,
-	p: Promise[Term] = Promise[Term]()
-) extends DeferredTask(p) {
-	def execute(index: Index) = Future {
-		val qname = QualifiedName(scope, ns, name)
-		index.definitions.get(qname) match {
-			case Some(DefinesTask(t)) => p.success(t)
-			case _ => p.failure(NameNotFoundException(qname))
+case class LookupTask(ns: Namespace, name: String, scope: Scope) extends DeferredTask[Option[Node]] {
+	val _result = BehaviorSubject[Option[Node]](None)
+
+	def result: Observable[Option[Node]] = _result
+
+	def exec(index: Index)(implicit ectx: ExecutionContext) = {
+		Future {
+			val qname = QualifiedName(scope, ns, name)
+			index.definitions.get(qname) match {
+				case Some(DefinesTask(t)) =>
+					_result.onNext(Some(t))
+				case _ =>
+					_result.onNext(None)
+					_result.onError(NameNotFoundException(qname))
+			}
 		}
+
+		result
 	}
 }
 
 /**
  * Define this term
  */
-case class DefinesTask(term: Term) extends ImmediateTask(term)
+case class DefinesTask(term: Node) extends ImmediateTask(term)
